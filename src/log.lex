@@ -87,7 +87,7 @@ fn range(
     "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE ts_ms >= ? AND ts_ms <= ? ORDER BY ts_ms ASC",
     [PInt(from_ms), PInt(to_ms)]) {
   Err(e)   => Err(e.message),
-  Ok(rows) => Ok(list.map(rows, fn (row) -> ev.Event { decode_event_row(row) })),
+  Ok(rows) => Ok(list.map(rows, decode_event_row)),
   }
 }
 
@@ -129,7 +129,7 @@ fn exec_stmts(db :: Db, stmts :: List[Str]) -> [sql] Result[Unit, Str] {
 
 # ---- Row decoder -------------------------------------------------
 
-fn decode_event_row(row) -> ev.Event {
+fn decode_event_row[R](row :: R) -> ev.Event {
   let id   := opt_str(sql.get_str(row, "id"))
   let kind := opt_str(sql.get_str(row, "kind"))
   let par  := sql.get_str(row, "parent")

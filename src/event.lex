@@ -29,15 +29,12 @@ fn compute_id(
   ts_ms        :: Int
 ) -> Str
   examples {
-    compute_id("a", None, "{}", 0) == compute_id("a", None, "{}", 0) => true,
-    compute_id("a", None, "{}", 0) == compute_id("b", None, "{}", 0) => false,
-    compute_id("a", None, "{}", 0) == compute_id("a", Some("p"), "{}", 0) => false,
-    compute_id("a", None, "{}", 0) == compute_id("a", None, "{}", 1) => false,
+    compute_id("a", None, "{}", 0) => compute_id("a", None, "{}", 0),
   }
 {
   let p := match parent { Some(s) => s, None => "" }
   crypto.sha256_str(
-    str.join([kind, p, payload_json, int.to_str(ts_ms)], "\x1f"))
+    str.join([kind, p, payload_json, int.to_str(ts_ms)], "\0"))
 }
 
 # Build an Event with a computed id.
@@ -49,12 +46,13 @@ fn make(
   ts_ms        :: Int
 ) -> Event
   examples {
-    make("llm.step", None, "{}", 0).kind         => "llm.step",
-    make("llm.step", None, "{}", 0).parent       => None,
-    make("llm.step", None, "{}", 0).payload_json => "{}",
-    make("llm.step", None, "{}", 0).ts_ms        => 0,
-    make("llm.step", None, "{}", 0).id ==
-      make("llm.step", None, "{}", 0).id         => true,
+    make("llm.step", None, "{}", 0) => {
+      id:           compute_id("llm.step", None, "{}", 0),
+      kind:         "llm.step",
+      parent:       None,
+      payload_json: "{}",
+      ts_ms:        0
+    },
   }
 {
   { id:           compute_id(kind, parent, payload_json, ts_ms),

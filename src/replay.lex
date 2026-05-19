@@ -30,7 +30,7 @@ fn task(
     "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE payload_json LIKE ? ORDER BY ts_ms ASC",
     [PStr(pattern)]) {
   Err(e)   => Err(e.message),
-  Ok(rows) => Ok(list.map(rows, fn (row) -> ev.Event { decode_event_row(row) })),
+  Ok(rows) => Ok(list.map(rows, decode_event_row)),
   }
 }
 
@@ -67,7 +67,7 @@ fn walk_up(
 
 # ---- Row decoder -------------------------------------------------
 
-fn decode_event_row(row) -> ev.Event {
+fn decode_event_row[R](row :: R) -> ev.Event {
   { id:           opt_str(sql.get_str(row, "id")),
     kind:         opt_str(sql.get_str(row, "kind")),
     parent:       sql.get_str(row, "parent"),

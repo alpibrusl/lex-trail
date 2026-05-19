@@ -66,13 +66,13 @@ fn chain(
     "SELECT id, event_id, kind, payload_json, ts_ms FROM attestations WHERE event_id = ? ORDER BY ts_ms ASC",
     [PStr(event_id)]) {
   Err(e)   => Err(e.message),
-  Ok(rows) => Ok(list.map(rows, fn (row) -> Attestation { decode_attest_row(row) })),
+  Ok(rows) => Ok(list.map(rows, decode_attest_row)),
   }
 }
 
 # ---- Row decoder -------------------------------------------------
 
-fn decode_attest_row(row) -> Attestation {
+fn decode_attest_row[R](row :: R) -> Attestation {
   { id:           opt_str(sql.get_str(row, "id")),
     event_id:     opt_str(sql.get_str(row, "event_id")),
     kind:         opt_str(sql.get_str(row, "kind")),
