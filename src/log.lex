@@ -20,10 +20,14 @@
 
 import "./event" as ev
 
-import "std.sql"  as sql
+import "std.sql" as sql
+
 import "std.time" as time
-import "std.str"  as str
-import "std.int"  as int
+
+import "std.str" as str
+
+import "std.int" as int
+
 import "std.list" as list
 
 type Log = { db :: Db }
@@ -35,7 +39,7 @@ fn open_memory() -> [sql, fs_write] Result[Log, Str] {
     Err(e) => Err(e.message),
     Ok(db) => match init_schema(db) {
       Err(msg) => Err(msg),
-      Ok(_)    => Ok({ db: db }),
+      Ok(_) => Ok({ db: db }),
     },
   }
 }
@@ -46,7 +50,7 @@ fn open(path :: Str) -> [sql, fs_write] Result[Log, Str] {
     Err(e) => Err(e.message),
     Ok(db) => match init_schema(db) {
       Err(msg) => Err(msg),
-      Ok(_)    => Ok({ db: db }),
+      Ok(_) => Ok({ db: db }),
     },
   }
 }
@@ -60,94 +64,84 @@ fn close(log :: Log) -> [sql] Unit {
 # Returns the appended Event (useful for chaining parent ids).
 # Uses INSERT OR IGNORE: if the same content hash already exists the
 # call is a no-op and returns the original event value.
-fn append(
-  log          :: Log,
-  kind         :: Str,
-  parent       :: Option[Str],
-  payload_json :: Str
-) -> [sql, time] Result[ev.Event, Str] {
+fn append(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str) -> [sql, time] Result[ev.Event, Str] {
   let ts_ms := time.now_ms()
-  let evt   := ev.make(kind, parent, payload_json, ts_ms)
-  let par_p := match evt.parent { Some(p) => PStr(p), None => PNull }
-  match sql.exec(log.db,
-    "INSERT OR IGNORE INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?)",
-    [PStr(evt.id), PStr(evt.kind), par_p, PStr(evt.payload_json), PInt(evt.ts_ms)]) {
-  Err(e) => Err(e.message),
-  Ok(_)  => Ok(evt),
+  let evt := ev.make(kind, parent, payload_json, ts_ms)
+  let par_p := match evt.parent {
+    Some(p) => PStr(p),
+    None => PNull,
+  }
+  match sql.exec(log.db, "INSERT OR IGNORE INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?)", [PStr(evt.id), PStr(evt.kind), par_p, PStr(evt.payload_json), PInt(evt.ts_ms)]) {
+    Err(e) => Err(e.message),
+    Ok(_) => Ok(evt),
   }
 }
 
 # Return all events with ts_ms in [from_ms, to_ms], ordered oldest-first.
-fn range(
-  log     :: Log,
-  from_ms :: Int,
-  to_ms   :: Int
-) -> [sql] Result[List[ev.Event], Str] {
-  match sql.query(log.db,
-    "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE ts_ms >= ? AND ts_ms <= ? ORDER BY ts_ms ASC",
-    [PInt(from_ms), PInt(to_ms)]) {
-  Err(e)   => Err(e.message),
-  Ok(rows) => Ok(list.map(rows, decode_event_row)),
+fn range(log :: Log, from_ms :: Int, to_ms :: Int) -> [sql] Result[List[ev.Event], Str] {
+  match sql.query(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE ts_ms >= ? AND ts_ms <= ? ORDER BY ts_ms ASC", [PInt(from_ms), PInt(to_ms)]) {
+    Err(e) => Err(e.message),
+    Ok(rows) => Ok(list.map(rows, decode_event_row)),
   }
 }
 
 # Return the most recently appended event, or None if the log is empty.
 fn head(log :: Log) -> [sql] Option[ev.Event] {
-  match sql.query(log.db,
-    "SELECT id, kind, parent, payload_json, ts_ms FROM events ORDER BY ts_ms DESC LIMIT 1",
-    []) {
-  Err(_)   => None,
-  Ok(rows) => match list.head(rows) {
-    None    => None,
-    Some(r) => Some(decode_event_row(r)),
-  },
+  match sql.query(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events ORDER BY ts_ms DESC LIMIT 1", []) {
+    Err(_) => None,
+    Ok(rows) => match list.head(rows) {
+      None => None,
+      Some(r) => Some(decode_event_row(r)),
+    },
   }
 }
 
 # ---- Internal schema bootstrap -----------------------------------
-
 fn init_schema(db :: Db) -> [sql] Result[Unit, Str] {
-  exec_stmts(db, [
-    "CREATE TABLE IF NOT EXISTS events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, parent TEXT, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms INTEGER NOT NULL)",
-    "CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind)",
-    "CREATE INDEX IF NOT EXISTS idx_events_ts   ON events(ts_ms)",
-    "CREATE TABLE IF NOT EXISTS attestations (id TEXT NOT NULL PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms INTEGER NOT NULL)",
-    "CREATE INDEX IF NOT EXISTS idx_attest_event ON attestations(event_id)",
-  ])
+  exec_stmts(db, ["CREATE TABLE IF NOT EXISTS events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, parent TEXT, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms INTEGER NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind)", "CREATE INDEX IF NOT EXISTS idx_events_ts   ON events(ts_ms)", "CREATE TABLE IF NOT EXISTS attestations (id TEXT NOT NULL PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms INTEGER NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_attest_event ON attestations(event_id)"])
 }
 
 fn exec_stmts(db :: Db, stmts :: List[Str]) -> [sql] Result[Unit, Str] {
   match list.head(stmts) {
-    None       => Ok(()),
-    Some(stmt) =>
-      match sql.exec(db, stmt, []) {
-        Err(e) => Err(e.message),
-        Ok(_)  => exec_stmts(db, list.tail(stmts)),
-      },
+    None => Ok(()),
+    Some(stmt) => match sql.exec(db, stmt, []) {
+      Err(e) => Err(e.message),
+      Ok(_) => exec_stmts(db, list.tail(stmts)),
+    },
   }
 }
 
 # ---- Row decoder -------------------------------------------------
-
 fn decode_event_row[R](row :: R) -> ev.Event {
-  let id   := opt_str(sql.get_str(row, "id"))
+  let id := opt_str(sql.get_str(row, "id"))
   let kind := opt_str(sql.get_str(row, "kind"))
-  let par  := sql.get_str(row, "parent")
-  let pay  := opt_str(sql.get_str(row, "payload_json"))
-  let ts   := opt_int(sql.get_int(row, "ts_ms"))
+  let par := sql.get_str(row, "parent")
+  let pay := opt_str(sql.get_str(row, "payload_json"))
+  let ts := opt_int(sql.get_int(row, "ts_ms"))
   { id: id, kind: kind, parent: par, payload_json: pay, ts_ms: ts }
 }
 
 fn opt_str(o :: Option[Str]) -> Str
   examples {
     opt_str(Some("x")) => "x",
-    opt_str(None)      => "",
+    opt_str(None) => ""
   }
-{ match o { Some(s) => s, None => "" } }
+{
+  match o {
+    Some(s) => s,
+    None => "",
+  }
+}
 
 fn opt_int(o :: Option[Int]) -> Int
   examples {
     opt_int(Some(42)) => 42,
-    opt_int(None)     => 0,
+    opt_int(None) => 0
   }
-{ match o { Some(n) => n, None => 0 } }
+{
+  match o {
+    Some(n) => n,
+    None => 0,
+  }
+}
+
