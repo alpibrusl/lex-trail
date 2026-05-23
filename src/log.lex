@@ -35,7 +35,7 @@ fn open_memory() -> [sql, fs_write] Result[Log, Str] {
     Err(e) => Err(e.message),
     Ok(db) => match init_schema(db) {
       Err(msg) => Err(msg),
-      Ok(())   => Ok({ db: db }),
+      Ok(_)    => Ok({ db: db }),
     },
   }
 }
@@ -46,7 +46,7 @@ fn open(path :: Str) -> [sql, fs_write] Result[Log, Str] {
     Err(e) => Err(e.message),
     Ok(db) => match init_schema(db) {
       Err(msg) => Err(msg),
-      Ok(())   => Ok({ db: db }),
+      Ok(_)    => Ok({ db: db }),
     },
   }
 }
