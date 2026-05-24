@@ -15,83 +15,64 @@
 # Run:
 #   lex run --allow-effects sql,fs_write,time,io examples/cross_framework.lex main
 
-import "lex-trail/log"    as log
-import "lex-trail/attest" as att
-import "lex-trail/replay" as replay
-import "lex-trail/kinds"  as k
-import "lex-trail/event"  as ev
+import "lex-trail/log" as log
 
-import "std.str"  as str
-import "std.int"  as int
+import "lex-trail/attest" as att
+
+import "lex-trail/replay" as replay
+
+import "lex-trail/kinds" as k
+
+import "lex-trail/event" as ev
+
+import "std.str" as str
+
+import "std.int" as int
+
 import "std.list" as list
-import "std.io"   as io
+
+import "std.io" as io
 
 fn main() -> [sql, fs_write, time, io] Unit {
   let task_id := "cross-fw-task-001"
   match log.open_memory() {
     Err(e) => io.print(str.concat("[error] log open failed: ", e)),
-    Ok(l)  => run_demo(l, task_id),
+    Ok(l) => run_demo(l, task_id),
   }
 }
 
 fn run_demo(l :: log.Log, task_id :: Str) -> [sql, time, io] Unit {
-  # Python A2A client → Lex server: task received
-  let recv_pay :=
-    str.concat("{\"task_id\":\"",
-      str.concat(task_id,
-        "\",\"from_agent\":\"python-agent\",\"skill\":\"translate\",\"params\":{\"text\":\"Hello\"}"))
+  let recv_pay := str.concat("{\"task_id\":\"", str.concat(task_id, "\",\"from_agent\":\"python-agent\",\"skill\":\"translate\",\"params\":{\"text\":\"Hello\"}}"))
   let recv_evt_opt := match log.append(l, k.a2a_task_received(), None, recv_pay) {
     Ok(evt) => Some(evt),
-    Err(e)  => {
-      let _ := io.print(str.concat("[warn] recv append failed: ", e))
+    Err(e) => {
+      let __lex_discard_1 := io.print(str.concat("[warn] recv append failed: ", e))
       None
     },
   }
-
-  # LLM inference step
-  let llm_pay :=
-    str.concat("{\"task_id\":\"",
-      str.concat(task_id,
-        "\",\"model\":\"lex-mini\",\"tokens_in\":12,\"tokens_out\":8,\"tool_calls\":[]}"))
-  let _ := log.append(l, k.llm_step(), None, llm_pay)
-
-  # Response message sent back to Python client
-  let msg_pay :=
-    str.concat("{\"task_id\":\"",
-      str.concat(task_id,
-        "\",\"message\":\"Hola\",\"parts\":[{\"type\":\"text\",\"text\":\"Hola\"}]}"))
-  let _ := log.append(l, k.a2a_msg_sent(), None, msg_pay)
-
-  # Task state: working → completed
-  let state_pay :=
-    str.concat("{\"task_id\":\"",
-      str.concat(task_id,
-        "\",\"from_state\":\"working\",\"to_state\":\"completed\"}"))
-  let _ := log.append(l, k.a2a_task_state_change(), None, state_pay)
-
-  # Attest the received event with origin info
-  let _ := match recv_evt_opt {
-    None      => (),
+  let llm_pay := str.concat("{\"task_id\":\"", str.concat(task_id, "\",\"model\":\"lex-mini\",\"tokens_in\":12,\"tokens_out\":8,\"tool_calls\":[]}"))
+  let __lex_discard_2 := log.append(l, k.llm_step(), None, llm_pay)
+  let msg_pay := str.concat("{\"task_id\":\"", str.concat(task_id, "\",\"message\":\"Hola\",\"parts\":[{\"type\":\"text\",\"text\":\"Hola\"}]}"))
+  let __lex_discard_3 := log.append(l, k.a2a_msg_sent(), None, msg_pay)
+  let state_pay := str.concat("{\"task_id\":\"", str.concat(task_id, "\",\"from_state\":\"working\",\"to_state\":\"completed\"}"))
+  let __lex_discard_4 := log.append(l, k.a2a_task_state_change(), None, state_pay)
+  let __lex_discard_5 := match recv_evt_opt {
+    None => (),
     Some(evt) => {
       let attest_pay := "{\"framework\":\"python-a2a\",\"version\":\"1.0\"}"
-      let _ := att.add(l, evt.id, "origin.verified", attest_pay)
+      let __lex_discard_6 := att.add(l, evt.id, "origin.verified", attest_pay)
       ()
     },
   }
-
-  # Replay
-  let _ := io.print("=== Cross-framework trace ===")
+  let __lex_discard_7 := io.print("=== Cross-framework trace ===")
   match replay.task(l, task_id) {
-    Err(e)   => io.print(str.concat("[error] replay failed: ", e)),
+    Err(e) => io.print(str.concat("[error] replay failed: ", e)),
     Ok(evts) => {
-      let _ := list.map(evts, fn (evt :: ev.Event) -> [io] Unit {
-        io.print(str.concat("  [",
-          str.concat(evt.kind,
-            str.concat("] id=",
-              str.concat(evt.id,
-                str.concat(" ts=", int.to_str(evt.ts_ms)))))))
+      let __lex_discard_8 := list.map(evts, fn (evt :: ev.Event) -> [io] Unit {
+        io.print(str.concat("  [", str.concat(evt.kind, str.concat("] id=", str.concat(evt.id, str.concat(" ts=", int.to_str(evt.ts_ms)))))))
       })
       io.print(str.concat(int.to_str(list.len(evts)), " events total."))
     },
   }
 }
+

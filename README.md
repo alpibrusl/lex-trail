@@ -36,8 +36,13 @@ fn record_and_replay(task_id :: Str) -> [sql, fs_write, time] Unit {
 | `lex-trail/event` | `Event` type, `make`, `compute_id`, `is_valid` |
 | `lex-trail/kinds` | standard event kind string constants |
 | `lex-trail/log` | `Log` type, `open_memory`, `open`, `append`, `range`, `head` |
+| `lex-trail/emit` | typed emitters for the standard kinds — the integration surface downstream packages call |
 | `lex-trail/attest` | attestation chain: `add`, `chain` |
 | `lex-trail/replay` | task replay: `task`, `walk_chain` |
+| `lex-trail/export` | JSON audit report: `task_report`, `event_json`, `events_json` |
+
+See [DESIGN.md](DESIGN.md) for the event vocabulary, the
+immutability/correlation/retention model, and integration status.
 
 ## Backends (v0.1)
 
@@ -47,6 +52,10 @@ fn record_and_replay(task_id :: Str) -> [sql, fs_write, time] Unit {
 ## Examples
 
 ```bash
+lex run --allow-effects sql,fs_write,time,io examples/end_to_end.lex main
 lex run --allow-effects sql,fs_write,time,io examples/a2a_replay.lex main
 lex run --allow-effects sql,fs_write,time,io examples/cross_framework.lex main
 ```
+
+`end_to_end.lex` is the headline demo: it emits a full task lifecycle
+through `emit.*` and prints an integrity-checked JSON audit report.
