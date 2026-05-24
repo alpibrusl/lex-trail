@@ -24,7 +24,36 @@ attest.chain(l, event_id)   -> [sql]           Result[List[Attestation], Str]
 replay.task(l, task_id)     -> [sql]           Result[List[Event], Str]
 replay.walk_chain(l, event_id)
                             -> [sql]           List[Event]
+
+# Typed emitters — prefer these over raw log.append at emit sites.
+# Each builds the standard payload for its kind and appends one event,
+# returning it so evt.id can be the next event's parent.
+emit.a2a_task_received(l, task_id, from_agent, skill, params_json, parent)
+emit.a2a_task_sent(l, task_id, to_agent, skill, params_json, parent)
+emit.a2a_message_received(l, task_id, message, parts_json, parent)
+emit.a2a_message_sent(l, task_id, message, parts_json, parent)
+emit.a2a_state_change(l, task_id, from_state, to_state, parent)
+emit.cap_invoked(l, task_id, capability, args_json, agent, parent)
+emit.cap_completed(l, task_id, capability, result, parent)
+emit.cap_failed(l, task_id, capability, error, parent)
+emit.spec_allowed(l, task_id, spec, bindings_json, parent)
+emit.spec_denied(l, task_id, spec, bindings_json, reason, parent)
+emit.llm_step(l, task_id, model, tokens_in, tokens_out, tool_calls_json, parent)
+emit.human_escalated(l, task_id, question, context, parent)
+emit.human_replied(l, task_id, response, parent)
+                            -> [sql, time]     Result[Event, Str]
+
+export.task_report(l, task_id)
+                            -> [sql]           Result[Str, Str]   # JSON audit report
+export.event_json(evt) / export.events_json(evts)
+                            ->                 Str
 ```
+
+Scalar string fields passed to `emit.*` are JSON-escaped with
+`json.stringify`, so caller input containing quotes / backslashes can no
+longer corrupt the payload. Composite fields (`params`, `parts`, `args`,
+`bindings`, `tool_calls`) are passed through verbatim — the caller is
+responsible for their JSON validity.
 
 ---
 
