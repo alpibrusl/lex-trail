@@ -59,3 +59,7 @@ lex run --allow-effects sql,fs_write,time,io examples/cross_framework.lex main
 
 `end_to_end.lex` is the headline demo: it emits a full task lifecycle
 through `emit.*` and prints an integrity-checked JSON audit report.
+
+---
+
+Built under the principles of [Trust Without Comprehension](https://alpibru.com/manifesto).
