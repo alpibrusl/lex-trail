@@ -117,3 +117,40 @@ fn human_replied() -> Str
   "human.replied"
 }
 
+# ---- Verified attestation events ----------------------------------
+#
+# Emitted automatically by lex-llm dispatch_one_traced when a
+# verification tool call succeeds. These form content-addressed
+# attestation chains that can replace code review (manifesto §6).
+fn verified_type_check() -> Str
+  examples {
+    verified_type_check() => "verified.type_check"
+  }
+{
+  "verified.type_check"
+}
+
+fn verified_spec_check() -> Str
+  examples {
+    verified_spec_check() => "verified.spec_check"
+  }
+{
+  "verified.spec_check"
+}
+
+fn verified_test() -> Str
+  examples {
+    verified_test() => "verified.test"
+  }
+{
+  "verified.test"
+}
+
+fn verified_review() -> Str
+  examples {
+    verified_review() => "verified.review"
+  }
+{
+  "verified.review"
+}
+

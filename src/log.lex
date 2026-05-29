@@ -67,11 +67,11 @@ fn close(log :: Log) -> [sql] Unit {
 fn append(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str) -> [sql, time] Result[ev.Event, Str] {
   let ts_ms := time.now_ms()
   let evt := ev.make(kind, parent, payload_json, ts_ms)
-  let par_p := match evt.parent {
-    Some(p) => PStr(p),
-    None => PNull,
+  let exec_result := match evt.parent {
+    Some(p) => sql.exec(log.db, "INSERT OR IGNORE INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?)", [PStr(evt.id), PStr(evt.kind), PStr(p), PStr(evt.payload_json), PInt(evt.ts_ms)]),
+    None => sql.exec(log.db, "INSERT OR IGNORE INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, NULL, ?, ?)", [PStr(evt.id), PStr(evt.kind), PStr(evt.payload_json), PInt(evt.ts_ms)]),
   }
-  match sql.exec(log.db, "INSERT OR IGNORE INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?)", [PStr(evt.id), PStr(evt.kind), par_p, PStr(evt.payload_json), PInt(evt.ts_ms)]) {
+  match exec_result {
     Err(e) => Err(e.message),
     Ok(_) => Ok(evt),
   }
