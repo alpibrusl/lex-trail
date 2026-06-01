@@ -6,6 +6,20 @@ traceability across cross-framework agent interactions.
 
 See [lex-lang#484](https://github.com/alpibrusl/lex-lang/issues/484) for the full design.
 
+## Demo — audit chains and session replay
+
+Every agent decision. SHA-256 content-addressed. Deterministically replayable. Tamper-evident.
+
+[![asciicast](https://asciinema.org/a/O19TtmPVF2QHBNUZ.svg)](https://asciinema.org/a/O19TtmPVF2QHBNUZ)
+
+```sh
+bash examples/replay_demo.sh
+```
+
+Two trading sessions recorded in parallel: one accepted (5 events, spec allowed), one rejected (3 events, spec denied). Chain verification, parent-pointer replay, full JSON audit report — and an explanation of why mutating any byte breaks the sequential SHA-256 hash chain.
+
+---
+
 ## Quick start
 
 ```lex
