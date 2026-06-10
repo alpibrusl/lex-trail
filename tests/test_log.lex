@@ -127,3 +127,40 @@ fn run_all() -> [sql, fs_write, time] Unit {
   }
 }
 
+
+fn test_append_at_deterministic() -> [sql, fs_write] Result[Unit, Str] {
+  match log.open_memory() {
+    Err(e) => Err(str.concat("open a failed: ", e)),
+    Ok(a) => match log.open_memory() {
+      Err(e) => Err(str.concat("open b failed: ", e)),
+      Ok(b) => match log.append_at(a, "sim.fill", None, "{\"px\":100}", 1700000000000) {
+        Err(e) => Err(str.concat("append_at a failed: ", e)),
+        Ok(ea) => match log.append_at(b, "sim.fill", None, "{\"px\":100}", 1700000000000) {
+          Err(e) => Err(str.concat("append_at b failed: ", e)),
+          Ok(eb) => if ea.id == eb.id {
+            Ok(())
+          } else {
+            Err("same inputs produced different event ids across logs")
+          },
+        },
+      },
+    },
+  }
+}
+
+fn test_append_at_ts_changes_id() -> [sql, fs_write] Result[Unit, Str] {
+  match log.open_memory() {
+    Err(e) => Err(str.concat("open failed: ", e)),
+    Ok(l) => match log.append_at(l, "sim.fill", None, "{\"px\":100}", 1) {
+      Err(e) => Err(str.concat("append_at 1 failed: ", e)),
+      Ok(e1) => match log.append_at(l, "sim.fill", None, "{\"px\":100}", 2) {
+        Err(e) => Err(str.concat("append_at 2 failed: ", e)),
+        Ok(e2) => if e1.id == e2.id {
+          Err("different ts_ms should produce different content hashes")
+        } else {
+          Ok(())
+        },
+      },
+    },
+  }
+}

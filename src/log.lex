@@ -15,6 +15,7 @@
 # -------
 #   open_memory / open  —  [sql, fs_write]
 #   append              —  [sql, time]   (time.now_ms for ts_ms)
+#   append_at           —  [sql]         (caller-supplied ts_ms; deterministic)
 #   range / head        —  [sql]
 #   close               —  [sql]
 
@@ -65,7 +66,17 @@ fn close(log :: Log) -> [sql] Unit {
 # Uses INSERT OR IGNORE: if the same content hash already exists the
 # call is a no-op and returns the original event value.
 fn append(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str) -> [sql, time] Result[ev.Event, Str] {
-  let ts_ms := time.now_ms()
+  append_at(log, kind, parent, payload_json, time.now_ms())
+}
+
+# Append a new event with a caller-supplied timestamp. This is the
+# deterministic variant: given the same (kind, parent, payload, ts_ms)
+# the event id — a SHA-256 content hash — is identical across runs,
+# which is what makes a trail replay-verifiable. Simulations should
+# pass sim-time here (e.g. episode_start + step * tick); `append` is
+# the wall-clock convenience wrapper.
+# Note the effect row: [sql] only — no clock access, by construction.
+fn append_at(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str, ts_ms :: Int) -> [sql] Result[ev.Event, Str] {
   let evt := ev.make(kind, parent, payload_json, ts_ms)
   let exec_result := match evt.parent {
     Some(p) => sql.exec(log.db, "INSERT OR IGNORE INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?)", [PStr(evt.id), PStr(evt.kind), PStr(p), PStr(evt.payload_json), PInt(evt.ts_ms)]),
