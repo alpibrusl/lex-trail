@@ -1,5 +1,9 @@
 # lex-trail
 
+[![CI](https://github.com/alpibrusl/lex-trail/actions/workflows/ci.yml/badge.svg)](https://github.com/alpibrusl/lex-trail/actions/workflows/ci.yml)
+
+**Part of the [Lex](https://lexlang.org) project** — Library · [Manifesto](https://lexlang.org/manifesto) · [All packages](https://lexlang.org)
+
 Content-addressed event log for A2A audit. Captures the A2A protocol
 surface (`lex-agent`) and LLM agent loop (`lex-llm`) for end-to-end
 traceability across cross-framework agent interactions.
