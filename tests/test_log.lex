@@ -127,7 +127,6 @@ fn run_all() -> [sql, fs_write, time] Unit {
   }
 }
 
-
 fn test_append_at_deterministic() -> [sql, fs_write] Result[Unit, Str] {
   match log.open_memory() {
     Err(e) => Err(str.concat("open a failed: ", e)),
@@ -164,3 +163,4 @@ fn test_append_at_ts_changes_id() -> [sql, fs_write] Result[Unit, Str] {
     },
   }
 }
+
