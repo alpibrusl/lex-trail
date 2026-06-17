@@ -23,15 +23,15 @@
 # Run the runtime story:
 #   lex run --allow-effects sql,fs_write,time,io examples/manifesto_tamper.lex main
 
-import "lex-trail/event" as ev
+import "../src/event" as ev
 
-import "lex-trail/log" as log
+import "../src/log" as log
 
-import "lex-trail/emit" as emit
+import "../src/emit" as emit
 
-import "lex-trail/replay" as replay
+import "../src/replay" as replay
 
-import "lex-trail/export" as export
+import "../src/export" as export
 
 import "std.str" as str
 

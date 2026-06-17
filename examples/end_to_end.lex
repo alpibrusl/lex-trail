@@ -18,13 +18,13 @@
 # Run:
 #   lex run --allow-effects sql,fs_write,time,io examples/end_to_end.lex main
 
-import "lex-trail/log" as log
+import "../src/log" as log
 
-import "lex-trail/emit" as emit
+import "../src/emit" as emit
 
-import "lex-trail/export" as export
+import "../src/export" as export
 
-import "lex-trail/event" as ev
+import "../src/event" as ev
 
 import "std.str" as str
 
