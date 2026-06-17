@@ -3,7 +3,7 @@
 # content-addressed integrity check accepts an honest event and rejects
 # a tampered one — trust by verification, not by reading the producer.
 
-import "lex-trail/event" as ev
+import "../src/event" as ev
 
 import "std.list" as list
 

@@ -4,5 +4,8 @@ version     = "0.1.0"
 description = "Content-addressed event log for A2A audit — append-only trail with SQLite and in-memory backends, attestation chains, and A2A task replay."
 
 [dependencies]
-# Self path-dependency so the `lex-trail/<module>` import form used by
-# downstream consumers (and the examples below) resolves in-tree.
+# No self-dependency. In-tree tests/examples import sibling modules by
+# relative path ("../src/<module>"); downstream consumers depend on lex-trail
+# as a git package and import "lex-trail/<module>" via that dependency.
+# (A path self-dep "." conflicts under the flat layout with the git ref that
+# consumers pull transitively — "can only hold one copy".)

@@ -13,13 +13,13 @@
 # Run:
 #   lex run --allow-effects sql,fs_write,time,io examples/a2a_replay.lex main
 
-import "lex-trail/log" as log
+import "../src/log" as log
 
-import "lex-trail/replay" as replay
+import "../src/replay" as replay
 
-import "lex-trail/kinds" as k
+import "../src/kinds" as k
 
-import "lex-trail/event" as ev
+import "../src/event" as ev
 
 import "std.str" as str
 
