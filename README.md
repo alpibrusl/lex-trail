@@ -80,4 +80,4 @@ through `emit.*` and prints an integrity-checked JSON audit report.
 
 ---
 
-Built under the principles of [Trust Without Comprehension](https://alpibru.com/manifesto).
+Built under the principles of [Trust Without Comprehension](https://lexlang.org/manifesto).
