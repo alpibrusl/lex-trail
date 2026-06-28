@@ -1,7 +1,7 @@
 # lex-trail — Append-only event log
 #
 # A Log wraps a `Db` handle with the trail schema applied on open.
-# Both backends are SQLite; the difference is the connection path:
+# Works on both SQLite and Postgres (BIGINT + ON CONFLICT are portable):
 #
 #   open_memory()  ->  ":memory:"  (ephemeral, in-process)
 #   open(path)     ->  file path   (persistent)
@@ -63,7 +63,7 @@ fn close(log :: Log) -> [sql] Unit {
 
 # Append a new event to the log. ts_ms is captured from the wall clock.
 # Returns the appended Event (useful for chaining parent ids).
-# Uses INSERT OR IGNORE: if the same content hash already exists the
+# Uses ON CONFLICT(id) DO NOTHING: if the same content hash already exists the
 # call is a no-op and returns the original event value.
 fn append(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str) -> [sql, time] Result[ev.Event, Str] {
   append_at(log, kind, parent, payload_json, time.now_ms())
@@ -79,8 +79,8 @@ fn append(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str) -
 fn append_at(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str, ts_ms :: Int) -> [sql] Result[ev.Event, Str] {
   let evt := ev.make(kind, parent, payload_json, ts_ms)
   let exec_result := match evt.parent {
-    Some(p) => sql.exec(log.db, "INSERT OR IGNORE INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?)", [PStr(evt.id), PStr(evt.kind), PStr(p), PStr(evt.payload_json), PInt(evt.ts_ms)]),
-    None => sql.exec(log.db, "INSERT OR IGNORE INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, NULL, ?, ?)", [PStr(evt.id), PStr(evt.kind), PStr(evt.payload_json), PInt(evt.ts_ms)]),
+    Some(p) => sql.exec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(p), PStr(evt.payload_json), PInt(evt.ts_ms)]),
+    None => sql.exec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, NULL, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(evt.payload_json), PInt(evt.ts_ms)]),
   }
   match exec_result {
     Err(e) => Err(e.message),
@@ -109,7 +109,7 @@ fn head(log :: Log) -> [sql] Option[ev.Event] {
 
 # ---- Internal schema bootstrap -----------------------------------
 fn init_schema(db :: Db) -> [sql] Result[Unit, Str] {
-  exec_stmts(db, ["CREATE TABLE IF NOT EXISTS events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, parent TEXT, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms INTEGER NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind)", "CREATE INDEX IF NOT EXISTS idx_events_ts   ON events(ts_ms)", "CREATE TABLE IF NOT EXISTS attestations (id TEXT NOT NULL PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms INTEGER NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_attest_event ON attestations(event_id)"])
+  exec_stmts(db, ["CREATE TABLE IF NOT EXISTS events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, parent TEXT, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms BIGINT NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind)", "CREATE INDEX IF NOT EXISTS idx_events_ts   ON events(ts_ms)", "CREATE TABLE IF NOT EXISTS attestations (id TEXT NOT NULL PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms BIGINT NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_attest_event ON attestations(event_id)"])
 }
 
 fn exec_stmts(db :: Db, stmts :: List[Str]) -> [sql] Result[Unit, Str] {
