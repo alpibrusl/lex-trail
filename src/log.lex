@@ -80,6 +80,17 @@ fn open_url(url :: Str) -> [sql, fs_write] Result[Log, Str] {
   }
 }
 
+# Wrap a RAW std.sql handle whose dialect the caller knows (lex-soft and other
+# hosts that opened the database themselves and pass `Db` around). Prefer
+# from_conn when you already hold a ConnDb — this exists so a raw-handle host
+# doesn't have to refactor its whole surface to gain the trail schema.
+#
+# The dialect argument is not decoration: pass DbSqlite for a `?` database and
+# DbPostgres for a `$n` one, or the parameterized statements will not bind.
+fn attach(db :: Db, dialect :: conn.Dialect) -> [sql, fs_write] Result[Log, Str] {
+  from_conn({ dialect: dialect, handle: db })
+}
+
 # Wrap an EXISTING lex-orm connection: the point of #8 — the trail shares the
 # caller's transaction-capable handle instead of opening its own database.
 fn from_conn(db :: conn.ConnDb) -> [sql, fs_write] Result[Log, Str] {
