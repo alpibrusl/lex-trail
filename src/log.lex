@@ -1,10 +1,16 @@
 # lex-trail — Append-only event log
 #
-# A Log wraps a `Db` handle with the trail schema applied on open.
-# Works on both SQLite and Postgres (BIGINT + ON CONFLICT are portable):
+# A Log wraps a lex-orm connection with the trail schema applied on open.
+# The trail persists on SQLite or PostgreSQL — a deployment co-locating the
+# trail with the records it describes (the finance stack's ask, #8) gets
+# atomic writes and one backup:
 #
-#   open_memory()  ->  ":memory:"  (ephemeral, in-process)
-#   open(path)     ->  file path   (persistent)
+#   open_memory()  ->  ":memory:"          (ephemeral, in-process)
+#   open(path)     ->  file path           (persistent SQLite)
+#   open_url(url)  ->  postgres://… | path (dialect from the URL scheme)
+#
+# The DDL is portable as-is; only placeholder numbering differs, and every
+# parameterized statement goes through `q.for_dialect` for that.
 #
 # Schema
 # ------
@@ -23,6 +29,12 @@ import "./event" as ev
 
 import "std.sql" as sql
 
+import "lex-orm/connection" as conn
+
+import "lex-orm/query" as q
+
+import "lex-orm/error" as dbe
+
 import "std.time" as time
 
 import "std.str" as str
@@ -31,13 +43,13 @@ import "std.int" as int
 
 import "std.list" as list
 
-type Log = { db :: Db }
+type Log = { db :: conn.ConnDb }
 
 # Open an ephemeral in-memory log. The database is destroyed when the
 # handle goes out of scope.
 fn open_memory() -> [sql, fs_write] Result[Log, Str] {
-  match sql.open(":memory:") {
-    Err(e) => Err(e.message),
+  match conn.connect_sqlite(":memory:") {
+    Err(e) => Err(dbe.message(e)),
     Ok(db) => match init_schema(db) {
       Err(msg) => Err(msg),
       Ok(_) => Ok({ db: db }),
@@ -47,8 +59,8 @@ fn open_memory() -> [sql, fs_write] Result[Log, Str] {
 
 # Open (or create) a persistent SQLite log at the given file path.
 fn open(path :: Str) -> [sql, fs_write] Result[Log, Str] {
-  match sql.open(path) {
-    Err(e) => Err(e.message),
+  match conn.connect_sqlite(path) {
+    Err(e) => Err(dbe.message(e)),
     Ok(db) => match init_schema(db) {
       Err(msg) => Err(msg),
       Ok(_) => Ok({ db: db }),
@@ -56,9 +68,43 @@ fn open(path :: Str) -> [sql, fs_write] Result[Log, Str] {
   }
 }
 
+# Open by URL: a `postgres://…` DSN persists the trail in PostgreSQL, anything
+# else is treated as a SQLite path. Same schema, same guarantees.
+fn open_url(url :: Str) -> [sql, fs_write] Result[Log, Str] {
+  match conn.open(url) {
+    Err(e) => Err(dbe.message(e)),
+    Ok(db) => match init_schema(db) {
+      Err(msg) => Err(msg),
+      Ok(_) => Ok({ db: db }),
+    },
+  }
+}
+
+# Wrap an EXISTING lex-orm connection: the point of #8 — the trail shares the
+# caller's transaction-capable handle instead of opening its own database.
+fn from_conn(db :: conn.ConnDb) -> [sql, fs_write] Result[Log, Str] {
+  match init_schema(db) {
+    Err(msg) => Err(msg),
+    Ok(_) => Ok({ db: db }),
+  }
+}
+
+# Every parameterized statement crosses the dialect boundary here: SQLite
+# takes `?`, PostgreSQL wants `$1..$n`, and q.for_dialect renumbers. Callers
+# below write plain `?` SQL and stay dialect-blind.
+fn xexec(db :: conn.ConnDb, stmt :: Str, params :: List[SqlParam]) -> [sql] Result[Int, SqlError] {
+  let sq := q.for_dialect({ sql: stmt, params: params }, db.dialect)
+  sql.exec(db.handle, sq.sql, sq.params)
+}
+
+fn xquery(db :: conn.ConnDb, stmt :: Str, params :: List[SqlParam]) -> [sql] Result[List[sql.Row], SqlError] {
+  let sq := q.for_dialect({ sql: stmt, params: params }, db.dialect)
+  sql.query(db.handle, sq.sql, sq.params)
+}
+
 # Release the database handle.
 fn close(log :: Log) -> [sql] Unit {
-  sql.close(log.db)
+  conn.close(log.db)
 }
 
 # Append a new event to the log. ts_ms is captured from the wall clock.
@@ -79,8 +125,8 @@ fn append(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str) -
 fn append_at(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str, ts_ms :: Int) -> [sql] Result[ev.Event, Str] {
   let evt := ev.make(kind, parent, payload_json, ts_ms)
   let exec_result := match evt.parent {
-    Some(p) => sql.exec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(p), PStr(evt.payload_json), PInt(evt.ts_ms)]),
-    None => sql.exec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, NULL, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(evt.payload_json), PInt(evt.ts_ms)]),
+    Some(p) => xexec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(p), PStr(evt.payload_json), PInt(evt.ts_ms)]),
+    None => xexec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, NULL, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(evt.payload_json), PInt(evt.ts_ms)]),
   }
   match exec_result {
     Err(e) => Err(e.message),
@@ -90,7 +136,7 @@ fn append_at(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str
 
 # Return all events with ts_ms in [from_ms, to_ms], ordered oldest-first.
 fn range(log :: Log, from_ms :: Int, to_ms :: Int) -> [sql] Result[List[ev.Event], Str] {
-  match sql.query(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE ts_ms >= ? AND ts_ms <= ? ORDER BY ts_ms ASC", [PInt(from_ms), PInt(to_ms)]) {
+  match xquery(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE ts_ms >= ? AND ts_ms <= ? ORDER BY ts_ms ASC", [PInt(from_ms), PInt(to_ms)]) {
     Err(e) => Err(e.message),
     Ok(rows) => Ok(list.map(rows, decode_event_row)),
   }
@@ -98,7 +144,7 @@ fn range(log :: Log, from_ms :: Int, to_ms :: Int) -> [sql] Result[List[ev.Event
 
 # Return the most recently appended event, or None if the log is empty.
 fn head(log :: Log) -> [sql] Option[ev.Event] {
-  match sql.query(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events ORDER BY ts_ms DESC LIMIT 1", []) {
+  match xquery(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events ORDER BY ts_ms DESC LIMIT 1", []) {
     Err(_) => None,
     Ok(rows) => match list.head(rows) {
       None => None,
@@ -108,14 +154,14 @@ fn head(log :: Log) -> [sql] Option[ev.Event] {
 }
 
 # ---- Internal schema bootstrap -----------------------------------
-fn init_schema(db :: Db) -> [sql] Result[Unit, Str] {
+fn init_schema(db :: conn.ConnDb) -> [sql] Result[Unit, Str] {
   exec_stmts(db, ["CREATE TABLE IF NOT EXISTS events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, parent TEXT, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms BIGINT NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind)", "CREATE INDEX IF NOT EXISTS idx_events_ts   ON events(ts_ms)", "CREATE TABLE IF NOT EXISTS attestations (id TEXT NOT NULL PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms BIGINT NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_attest_event ON attestations(event_id)"])
 }
 
-fn exec_stmts(db :: Db, stmts :: List[Str]) -> [sql] Result[Unit, Str] {
+fn exec_stmts(db :: conn.ConnDb, stmts :: List[Str]) -> [sql] Result[Unit, Str] {
   match list.head(stmts) {
     None => Ok(()),
-    Some(stmt) => match sql.exec(db, stmt, []) {
+    Some(stmt) => match sql.exec(db.handle, stmt, []) {
       Err(e) => Err(e.message),
       Ok(_) => exec_stmts(db, list.tail(stmts)),
     },

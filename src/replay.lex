@@ -25,7 +25,7 @@ import "std.list" as list
 # Return all events whose payload_json contains task_id, oldest-first.
 fn task(log :: l.Log, task_id :: Str) -> [sql] Result[List[ev.Event], Str] {
   let pattern := str.concat("%\"task_id\":\"", str.concat(task_id, "\"%"))
-  match sql.query(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE payload_json LIKE ? ORDER BY ts_ms ASC", [PStr(pattern)]) {
+  match l.xquery(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE payload_json LIKE ? ORDER BY ts_ms ASC", [PStr(pattern)]) {
     Err(e) => Err(e.message),
     Ok(rows) => Ok(list.map(rows, decode_event_row)),
   }
@@ -37,7 +37,7 @@ fn walk_chain(log :: l.Log, event_id :: Str) -> [sql] List[ev.Event] {
 }
 
 fn walk_up(log :: l.Log, event_id :: Str, acc :: List[ev.Event]) -> [sql] List[ev.Event] {
-  match sql.query(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE id = ? LIMIT 1", [PStr(event_id)]) {
+  match l.xquery(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE id = ? LIMIT 1", [PStr(event_id)]) {
     Err(_) => list.reverse(acc),
     Ok(rows) => match list.head(rows) {
       None => list.reverse(acc),
