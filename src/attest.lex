@@ -32,7 +32,7 @@ fn add(log :: l.Log, event_id :: Str, kind :: Str, payload_json :: Str) -> [sql,
   let ts_ms := time.now_ms()
   let id := ev.compute_id(str.concat("attest:", kind), Some(event_id), payload_json, ts_ms)
   let att := { id: id, event_id: event_id, kind: kind, payload_json: payload_json, ts_ms: ts_ms }
-  match sql.exec(log.db, "INSERT INTO attestations(id, event_id, kind, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(att.id), PStr(att.event_id), PStr(att.kind), PStr(att.payload_json), PInt(att.ts_ms)]) {
+  match l.xexec(log.db, "INSERT INTO attestations(id, event_id, kind, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(att.id), PStr(att.event_id), PStr(att.kind), PStr(att.payload_json), PInt(att.ts_ms)]) {
     Err(e) => Err(e.message),
     Ok(_) => Ok(att),
   }
@@ -40,7 +40,7 @@ fn add(log :: l.Log, event_id :: Str, kind :: Str, payload_json :: Str) -> [sql,
 
 # Return all attestations for event_id, oldest-first.
 fn chain(log :: l.Log, event_id :: Str) -> [sql] Result[List[Attestation], Str] {
-  match sql.query(log.db, "SELECT id, event_id, kind, payload_json, ts_ms FROM attestations WHERE event_id = ? ORDER BY ts_ms ASC", [PStr(event_id)]) {
+  match l.xquery(log.db, "SELECT id, event_id, kind, payload_json, ts_ms FROM attestations WHERE event_id = ? ORDER BY ts_ms ASC", [PStr(event_id)]) {
     Err(e) => Err(e.message),
     Ok(rows) => Ok(list.map(rows, decode_attest_row)),
   }

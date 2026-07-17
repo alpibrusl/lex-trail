@@ -1,9 +1,10 @@
 [package]
 name        = "lex-trail"
 version     = "0.1.0"
-description = "Content-addressed event log for A2A audit — append-only trail with SQLite and in-memory backends, attestation chains, and A2A task replay."
+description = "Content-addressed event log for A2A audit — append-only trail on SQLite or PostgreSQL, attestation chains, and A2A task replay."
 
 [dependencies]
+lex-orm = { git = "https://github.com/alpibrusl/lex-orm" }
 # No self-dependency. In-tree tests/examples import sibling modules by
 # relative path ("../src/<module>"); downstream consumers depend on lex-trail
 # as a git package and import "lex-trail/<module>" via that dependency.
