@@ -112,7 +112,7 @@ fn test_range_empty_window() -> [sql, fs_write] Result[Unit, Str] {
 }
 
 fn run_all() -> [sql, fs_write, time] Unit {
-  let results := [test_open_memory(), test_head_empty(), test_append_and_head(), test_append_sets_kind(), test_append_with_parent(), test_range_returns_appended(), test_range_empty_window()]
+  let results := [test_open_memory(), test_head_empty(), test_append_and_head(), test_append_sets_kind(), test_append_with_parent(), test_range_returns_appended(), test_range_empty_window(), test_append_actor_scopes(), test_plain_append_actor_empty()]
   let failures := list.fold(results, 0, fn (n :: Int, r :: Result[Unit, Str]) -> Int {
     match r {
       Ok(_) => n,
@@ -158,6 +158,56 @@ fn test_append_at_ts_changes_id() -> [sql, fs_write] Result[Unit, Str] {
           Err("different ts_ms should produce different content hashes")
         } else {
           Ok(())
+        },
+      },
+    },
+  }
+}
+
+# M-2: append_actor writes the indexed actor column and by_actor scopes to it —
+# the audit boundary that previously needed a payload_json LIKE scan.
+fn test_append_actor_scopes() -> [sql, fs_write, time] Result[Unit, Str] {
+  match log.open_memory() {
+    Err(e) => Err(str.concat("open failed: ", e)),
+    Ok(l) => match log.append_actor(l, "settlement.chargeback", "org-a-agent", None, "{\"agent\":\"org-a-agent\"}") {
+      Err(e) => Err(str.concat("append_actor a failed: ", e)),
+      Ok(_) => match log.append_actor(l, "settlement.chargeback", "org-b-agent", None, "{\"agent\":\"org-b-agent\"}") {
+        Err(e) => Err(str.concat("append_actor b failed: ", e)),
+        Ok(_) => match log.append(l, "system.tick", None, "{}") {
+          Err(e) => Err(str.concat("append plain failed: ", e)),
+          Ok(_) => match log.by_actor(l, "org-a-agent") {
+            Err(e) => Err(str.concat("by_actor failed: ", e)),
+            Ok(rows) => if list.len(rows) == 1 {
+              match list.head(rows) {
+                Some(r) => if r.kind == "settlement.chargeback" {
+                  Ok(())
+                } else {
+                  Err("by_actor returned the wrong event")
+                },
+                None => Err("by_actor list.head empty"),
+              }
+            } else {
+              Err(str.concat("by_actor(org-a-agent) should return exactly 1 event, got ", int.to_str(list.len(rows))))
+            },
+          },
+        },
+      },
+    },
+  }
+}
+
+# Plain append leaves actor '' — it must NOT leak into another actor's scope.
+fn test_plain_append_actor_empty() -> [sql, fs_write, time] Result[Unit, Str] {
+  match log.open_memory() {
+    Err(e) => Err(str.concat("open failed: ", e)),
+    Ok(l) => match log.append(l, "system.tick", None, "{}") {
+      Err(e) => Err(str.concat("append failed: ", e)),
+      Ok(_) => match log.by_actor(l, "") {
+        Err(e) => Err(str.concat("by_actor empty failed: ", e)),
+        Ok(rows) => if list.len(rows) == 1 {
+          Ok(())
+        } else {
+          Err("plain append should be found under actor ''")
         },
       },
     },

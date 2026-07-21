@@ -134,10 +134,26 @@ fn append(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str) -
 # the wall-clock convenience wrapper.
 # Note the effect row: [sql] only — no clock access, by construction.
 fn append_at(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str, ts_ms :: Int) -> [sql] Result[ev.Event, Str] {
+  append_actor_at(log, kind, "", parent, payload_json, ts_ms)
+}
+
+# Like `append`, but records the event's acting party in the indexed `actor`
+# column so audit views can scope by agent without a payload LIKE scan. The
+# actor is a denormalized copy of a field the caller already puts in
+# payload_json; it is NOT part of the content-addressed id (which stays a hash of
+# kind/parent/payload/ts), so two events differing only in actor already differ
+# in payload and so in id — no id collision, and the ON CONFLICT stays a true
+# same-event no-op.
+fn append_actor(log :: Log, kind :: Str, actor :: Str, parent :: Option[Str], payload_json :: Str) -> [sql, time] Result[ev.Event, Str] {
+  append_actor_at(log, kind, actor, parent, payload_json, time.now_ms())
+}
+
+# Deterministic variant of append_actor (caller-supplied ts_ms).
+fn append_actor_at(log :: Log, kind :: Str, actor :: Str, parent :: Option[Str], payload_json :: Str, ts_ms :: Int) -> [sql] Result[ev.Event, Str] {
   let evt := ev.make(kind, parent, payload_json, ts_ms)
   let exec_result := match evt.parent {
-    Some(p) => xexec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(p), PStr(evt.payload_json), PInt(evt.ts_ms)]),
-    None => xexec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms) VALUES (?, ?, NULL, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(evt.payload_json), PInt(evt.ts_ms)]),
+    Some(p) => xexec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms, actor) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(p), PStr(evt.payload_json), PInt(evt.ts_ms), PStr(actor)]),
+    None => xexec(log.db, "INSERT INTO events(id, kind, parent, payload_json, ts_ms, actor) VALUES (?, ?, NULL, ?, ?, ?) ON CONFLICT(id) DO NOTHING", [PStr(evt.id), PStr(evt.kind), PStr(evt.payload_json), PInt(evt.ts_ms), PStr(actor)]),
   }
   match exec_result {
     Err(e) => Err(e.message),
@@ -148,6 +164,17 @@ fn append_at(log :: Log, kind :: Str, parent :: Option[Str], payload_json :: Str
 # Return all events with ts_ms in [from_ms, to_ms], ordered oldest-first.
 fn range(log :: Log, from_ms :: Int, to_ms :: Int) -> [sql] Result[List[ev.Event], Str] {
   match xquery(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE ts_ms >= ? AND ts_ms <= ? ORDER BY ts_ms ASC", [PInt(from_ms), PInt(to_ms)]) {
+    Err(e) => Err(e.message),
+    Ok(rows) => Ok(list.map(rows, decode_event_row)),
+  }
+}
+
+# Return every event recorded under `actor`, oldest-first. Uses the indexed
+# actor column, so scoping an audit view to one party's events is an index range
+# rather than a payload_json LIKE scan. Events appended via plain `append` (actor
+# left '') are returned only by by_actor("").
+fn by_actor(log :: Log, actor :: Str) -> [sql] Result[List[ev.Event], Str] {
+  match xquery(log.db, "SELECT id, kind, parent, payload_json, ts_ms FROM events WHERE actor = ? ORDER BY ts_ms ASC", [PStr(actor)]) {
     Err(e) => Err(e.message),
     Ok(rows) => Ok(list.map(rows, decode_event_row)),
   }
@@ -165,8 +192,41 @@ fn head(log :: Log) -> [sql] Option[ev.Event] {
 }
 
 # ---- Internal schema bootstrap -----------------------------------
+# The `actor` column is an indexed, denormalized copy of the event's acting
+# party — supplied by the caller via `append_actor` (see below). Consumers that
+# scope an audit view to one tenant's agents were left scanning payload_json with
+# LIKE; an indexed column turns that filter into an index range. Fresh databases
+# get it from CREATE TABLE; databases predating this version get it from the
+# tolerated ALTER, then the index. Callers using plain `append` leave it ''.
 fn init_schema(db :: conn.ConnDb) -> [sql] Result[Unit, Str] {
-  exec_stmts(db, ["CREATE TABLE IF NOT EXISTS events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, parent TEXT, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms BIGINT NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind)", "CREATE INDEX IF NOT EXISTS idx_events_ts   ON events(ts_ms)", "CREATE TABLE IF NOT EXISTS attestations (id TEXT NOT NULL PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms BIGINT NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_attest_event ON attestations(event_id)"])
+  match exec_stmts(db, ["CREATE TABLE IF NOT EXISTS events (id TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, parent TEXT, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms BIGINT NOT NULL, actor TEXT NOT NULL DEFAULT '')", "CREATE INDEX IF NOT EXISTS idx_events_kind ON events(kind)", "CREATE INDEX IF NOT EXISTS idx_events_ts   ON events(ts_ms)", "CREATE TABLE IF NOT EXISTS attestations (id TEXT NOT NULL PRIMARY KEY, event_id TEXT NOT NULL, kind TEXT NOT NULL, payload_json TEXT NOT NULL DEFAULT '{}', ts_ms BIGINT NOT NULL)", "CREATE INDEX IF NOT EXISTS idx_attest_event ON attestations(event_id)"]) {
+    Err(e) => Err(e),
+    Ok(_) => match add_actor_column(db) {
+      Err(e) => Err(e),
+      Ok(_) => exec_stmts(db, ["CREATE INDEX IF NOT EXISTS idx_events_actor ON events(actor)"]),
+    },
+  }
+}
+
+# Add `actor` to an events table created before this version. Neither SQLite nor
+# every Postgres supports `ADD COLUMN IF NOT EXISTS` portably, so we run the ALTER
+# and treat a duplicate-column error (the fresh-database case, where CREATE TABLE
+# already added it) as success. Any other failure propagates.
+fn add_actor_column(db :: conn.ConnDb) -> [sql] Result[Unit, Str] {
+  match sql.exec(db.handle, "ALTER TABLE events ADD COLUMN actor TEXT NOT NULL DEFAULT ''", []) {
+    Ok(_) => Ok(()),
+    Err(e) => if is_duplicate_column(e.message) {
+      Ok(())
+    } else {
+      Err(e.message)
+    },
+  }
+}
+
+# A duplicate-column error means the column is already there — SQLite says
+# "duplicate column name", Postgres says "already exists".
+fn is_duplicate_column(msg :: Str) -> Bool {
+  str.contains(msg, "duplicate column") or str.contains(msg, "already exists")
 }
 
 fn exec_stmts(db :: conn.ConnDb, stmts :: List[Str]) -> [sql] Result[Unit, Str] {
