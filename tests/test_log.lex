@@ -164,7 +164,6 @@ fn test_append_at_ts_changes_id() -> [sql, fs_write] Result[Unit, Str] {
   }
 }
 
-
 # M-2: append_actor writes the indexed actor column and by_actor scopes to it —
 # the audit boundary that previously needed a payload_json LIKE scan.
 fn test_append_actor_scopes() -> [sql, fs_write, time] Result[Unit, Str] {
@@ -180,7 +179,11 @@ fn test_append_actor_scopes() -> [sql, fs_write, time] Result[Unit, Str] {
             Err(e) => Err(str.concat("by_actor failed: ", e)),
             Ok(rows) => if list.len(rows) == 1 {
               match list.head(rows) {
-                Some(r) => if r.kind == "settlement.chargeback" { Ok(()) } else { Err("by_actor returned the wrong event") },
+                Some(r) => if r.kind == "settlement.chargeback" {
+                  Ok(())
+                } else {
+                  Err("by_actor returned the wrong event")
+                },
                 None => Err("by_actor list.head empty"),
               }
             } else {
@@ -201,12 +204,13 @@ fn test_plain_append_actor_empty() -> [sql, fs_write, time] Result[Unit, Str] {
       Err(e) => Err(str.concat("append failed: ", e)),
       Ok(_) => match log.by_actor(l, "") {
         Err(e) => Err(str.concat("by_actor empty failed: ", e)),
-        Ok(rows) => if list.len(rows) == 1 { Ok(()) } else { Err("plain append should be found under actor ''") },
+        Ok(rows) => if list.len(rows) == 1 {
+          Ok(())
+        } else {
+          Err("plain append should be found under actor ''")
+        },
       },
     },
   }
 }
 
-fn test_probe_must_fail() -> Result[Unit, Str] {
-  Err("probe: this must make the file FAIL if discovered")
-}

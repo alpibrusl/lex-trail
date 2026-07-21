@@ -215,7 +215,11 @@ fn init_schema(db :: conn.ConnDb) -> [sql] Result[Unit, Str] {
 fn add_actor_column(db :: conn.ConnDb) -> [sql] Result[Unit, Str] {
   match sql.exec(db.handle, "ALTER TABLE events ADD COLUMN actor TEXT NOT NULL DEFAULT ''", []) {
     Ok(_) => Ok(()),
-    Err(e) => if is_duplicate_column(e.message) { Ok(()) } else { Err(e.message) },
+    Err(e) => if is_duplicate_column(e.message) {
+      Ok(())
+    } else {
+      Err(e.message)
+    },
   }
 }
 
