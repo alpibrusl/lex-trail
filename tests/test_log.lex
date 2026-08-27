@@ -112,7 +112,7 @@ fn test_range_empty_window() -> [sql, fs_write] Result[Unit, Str] {
 }
 
 fn run_all() -> [sql, fs_write, time] Unit {
-  let results := [test_open_memory(), test_head_empty(), test_append_and_head(), test_append_sets_kind(), test_append_with_parent(), test_range_returns_appended(), test_range_empty_window(), test_append_actor_scopes(), test_plain_append_actor_empty()]
+  let results := [test_open_memory(), test_head_empty(), test_append_and_head(), test_append_sets_kind(), test_append_with_parent(), test_range_returns_appended(), test_range_empty_window(), test_append_at_deterministic(), test_append_at_ts_changes_id(), test_append_actor_scopes(), test_plain_append_actor_empty()]
   let failures := list.fold(results, 0, fn (n :: Int, r :: Result[Unit, Str]) -> Int {
     match r {
       Ok(_) => n,
