@@ -81,3 +81,9 @@ through `emit.*` and prints an integrity-checked JSON audit report.
 ---
 
 Built under the principles of [Trust Without Comprehension](https://lexlang.org/manifesto).
+
+## License
+
+Copyright (c) 2026 lex-trail contributors.
+
+Licensed under the [EUPL-1.2](LICENSE) — the European Union Public Licence, as used across the `lex-*` ecosystem.
