@@ -42,3 +42,11 @@ jobs:
 
       - name: Test
         run: lex test --allow-effects io,time,crypto,random,sql,fs_read,fs_write,net,concurrent tests/
+
+      # The chain's claim is that a counterparty can verify an id without
+      # trusting whoever produced it — true only if the format can be
+      # implemented from SPEC.md by someone who cannot run Lex. This runs an
+      # independent Python implementation against vectors generated from the
+      # Lex one. If they diverge, the format is not a format.
+      - name: An independent implementation reproduces the wire format
+        run: python3 spec/verify_vectors.py spec/vectors.json

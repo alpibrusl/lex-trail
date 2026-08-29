@@ -1,0 +1,77 @@
+{
+  "note": "Generated from the lex-trail implementation, not hand-written. An implementation that reproduces every id and digest here is compatible with this chain format; see SPEC.md.",
+  "spec": "SPEC.md",
+  "events": [
+    {
+      "kind": "meter.reading",
+      "parent": "",
+      "payload_json": "{\"wh\":105500}",
+      "ts_ms": 1788000000000,
+      "id": "c4a796cbbe6022d02f6cc33d9364e704a4f69a495bacf1774baee477b4bd60ea"
+    },
+    {
+      "kind": "settlement.energy",
+      "parent": "0000000000000000000000000000000000000000000000000000000000000000",
+      "payload_json": "{\"eur_cents\":1064}",
+      "ts_ms": 1788000900000,
+      "id": "bc907a47a1e1b7de38ce5d855675d8a4c0c62803615cda8bc5fab83a961fbb3d"
+    },
+    {
+      "kind": "a",
+      "parent": "",
+      "payload_json": "{}",
+      "ts_ms": 0,
+      "id": "5bf6b8f888bcbad695f1935cc5586383c2e5bd2e7ab2437adde0a9a7d8bb5cc3"
+    },
+    {
+      "kind": "kind.with.dots",
+      "parent": "",
+      "payload_json": "{\"k\": \"v with spaces\"}",
+      "ts_ms": 1,
+      "id": "1e5162a9f3df33475b2315959a3ca6a7c32831563411925aa002c1fe8b40118b"
+    },
+    {
+      "kind": "unicode",
+      "parent": "",
+      "payload_json": "{\"note\":\"café — über\"}",
+      "ts_ms": 42,
+      "id": "6c3b56f13cf58a8d1ce5315e70bbac1cf6925d020ef210c840b9c6a0267d9945"
+    },
+    {
+      "kind": "empty.payload",
+      "parent": "",
+      "payload_json": "",
+      "ts_ms": 7,
+      "id": "e8551e375ab7490c294f5d44df78b5ab9ea9d58fff50ff329442a3ce0cc3d1c3"
+    }
+  ],
+  "anchors": [
+    {
+      "ids": [
+        "c",
+        "a",
+        "b"
+      ],
+      "digest": "0e9f64031fcb2bc708b531c2a20441580425d151a38503f38592a7dd36019d3b"
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "digest": "0e9f64031fcb2bc708b531c2a20441580425d151a38503f38592a7dd36019d3b"
+    },
+    {
+      "ids": [],
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "ids": [
+        "zz",
+        "aa"
+      ],
+      "digest": "aa45f976abd6488d28c89144fb7d3dbc7b6b5e9b84094615465338b7c5831498"
+    }
+  ]
+}
