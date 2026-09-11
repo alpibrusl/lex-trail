@@ -1,4 +1,5 @@
 name: Publish to lex-hub
+
 on:
   push:
     branches: [main]
@@ -6,52 +7,6 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
-
-      - name: Check if version changed
-        id: ver
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            OLD=$(git show HEAD~1:lex.toml 2>/dev/null | grep '^version' | head -1 || echo "")
-            NEW=$(grep '^version' lex.toml | head -1)
-            [ "$OLD" != "$NEW" ] && echo "changed=true" >> $GITHUB_OUTPUT \
-                                  || echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Install lex
-        if: steps.ver.outputs.changed == 'true'
-        run: |
-          curl -fsSL "https://github.com/alpibrusl/lex-lang/releases/download/v0.10.18/lex-v0.10.18-x86_64-unknown-linux-gnu.tar.gz" \
-            | tar -xz --strip-components=1 -C /usr/local/bin
-
-      - name: Mint JWT + publish
-        if: steps.ver.outputs.changed == 'true'
-        env:
-          LEXHUB_ADMIN_SECRET: ${{ secrets.LEXHUB_ADMIN_SECRET }}
-        run: |
-          JWT=$(curl -sf -X POST https://vcs.lexlang.org/v1/admin/mint \
-            -H "Authorization: Bearer $LEXHUB_ADMIN_SECRET" \
-            -H "Content-Type: application/json" \
-            -d '{"tenant_id":"alpibrusl","ttl_secs":3600}' | jq -r .token)
-          lex pkg publish --registry https://vcs.lexlang.org --token "$JWT"
-
-      - name: Set visibility public
-        if: steps.ver.outputs.changed == 'true'
-        env:
-          LEXHUB_ADMIN_SECRET: ${{ secrets.LEXHUB_ADMIN_SECRET }}
-        run: |
-          JWT=$(curl -sf -X POST https://vcs.lexlang.org/v1/admin/mint \
-            -H "Authorization: Bearer $LEXHUB_ADMIN_SECRET" \
-            -H "Content-Type: application/json" \
-            -d '{"tenant_id":"alpibrusl","ttl_secs":300}' | jq -r .token)
-          PKG=$(grep -m1 '^name' lex.toml | sed 's/.*= *"\(.*\)"/\1/')
-          curl -sf -X PUT "https://vcs.lexlang.org/v1/pkg/${PKG}/visibility" \
-            -H "Authorization: Bearer $JWT" \
-            -H "Content-Type: application/json" \
-            -d '{"visibility":"public"}' || true
+    uses: alpibrusl/lex-hub/.github/workflows/lex-publish.yml@main
+    secrets:
+      LEXHUB_ADMIN_SECRET: ${{ secrets.LEXHUB_ADMIN_SECRET }}
