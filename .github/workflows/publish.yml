@@ -7,6 +7,59 @@ on:
 
 jobs:
   publish:
-    uses: alpibrusl/lex-hub/.github/workflows/lex-publish.yml@main
-    secrets:
-      LEXHUB_ADMIN_SECRET: ${{ secrets.LEXHUB_ADMIN_SECRET }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      # No version-string gate here on purpose (there used to be one,
+      # keyed off whether lex.toml's `version` field changed between
+      # commits -- removed because it silently no-op'd every push for
+      # months: real commits landed without ever bumping `version`, so
+      # the gate always evaluated false, and the job still reported
+      # success in under 10s every time. lex-hub's store is
+      # content-addressed, so republishing unchanged functions creates
+      # no new operations -- running this unconditionally on every push
+      # to main is safe and idempotent, and removes the whole class of
+      # bug rather than just narrowing it.
+
+      - name: Read required lex version from lex.toml
+        id: lexver
+        run: |
+          v=$(grep -m1 '^lex ' lex.toml | sed 's/.*= *"\(.*\)"/\1/')
+          if [ -z "$v" ]; then
+            echo "::warning::lex.toml has no top-level 'lex' version pin; falling back to 0.10.18" >&2
+            v="0.10.18"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Install lex
+        run: |
+          v="${{ steps.lexver.outputs.version }}"
+          curl -fsSL "https://github.com/alpibrusl/lex-lang/releases/download/v${v}/lex-v${v}-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz --strip-components=1 -C /usr/local/bin
+
+      - name: Mint JWT + publish
+        env:
+          LEXHUB_ADMIN_SECRET: ${{ secrets.LEXHUB_ADMIN_SECRET }}
+        run: |
+          JWT=$(curl -sf -X POST https://vcs.lexlang.org/v1/admin/mint \
+            -H "Authorization: Bearer $LEXHUB_ADMIN_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"tenant_id":"alpibrusl","ttl_secs":3600}' | jq -r .token)
+          lex pkg publish --registry https://vcs.lexlang.org --token "$JWT"
+
+      - name: Set visibility public
+        env:
+          LEXHUB_ADMIN_SECRET: ${{ secrets.LEXHUB_ADMIN_SECRET }}
+        run: |
+          JWT=$(curl -sf -X POST https://vcs.lexlang.org/v1/admin/mint \
+            -H "Authorization: Bearer $LEXHUB_ADMIN_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{"tenant_id":"alpibrusl","ttl_secs":300}' | jq -r .token)
+          PKG=$(grep -m1 '^name' lex.toml | sed 's/.*= *"\(.*\)"/\1/')
+          curl -sf -X PUT "https://vcs.lexlang.org/v1/pkg/${PKG}/visibility" \
+            -H "Authorization: Bearer $JWT" \
+            -H "Content-Type: application/json" \
+            -d '{"visibility":"public"}' || true
