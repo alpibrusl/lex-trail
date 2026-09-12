@@ -1,6 +1,7 @@
 [package]
 name        = "lex-trail"
 version     = "0.1.1"
+lex         = "0.11.13"
 description = "Content-addressed event log for A2A audit — append-only trail on SQLite or PostgreSQL, attestation chains, and A2A task replay."
 
 [dependencies]
